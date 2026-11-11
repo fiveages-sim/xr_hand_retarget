@@ -66,8 +66,7 @@ command:
 | 层 | 文件 |
 |----|------|
 | 索引 | `wuji_hand2.yaml` |
-| T_robot | `hands/wuji.yaml` |
-| Official | `official/adaptive_analytical_*.yaml` |
+| 求解器 | `wuji_sdk.RetargetSession`（随 `xr_hand_retarget` 依赖安装） |
 
 ### XHand1
 

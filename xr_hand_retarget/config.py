@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from xr_hand_retarget.backends.xhand1_config import HandConfig, load_hand_config
 
 from xr_hand_retarget.control.command_safety import (
@@ -17,34 +15,10 @@ from xr_hand_retarget.control.command_safety import (
 from xr_hand_retarget.safety import MotionSafetyGains, parse_motion_safety
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_CONFIG = _PACKAGE_ROOT / "configs" / "wuji_hand2.yaml"
 _REPO_ROOT = _PACKAGE_ROOT.parent
-
-# Pico optical still uses official Hand-2 URDF + mediapipe_rotation (those
-# Euler angles were retuned for Hand 2 wrist orientation, not only for glove).
-# Only undo glove-specific thumb MCP skip in FullHandVec.
-OPTICAL_RETARGET_OVERLAY: dict[str, Any] = {
-    "thumb_skip_pip": False,
-}
-
-_DEFAULT_CURL_CALIB = _PACKAGE_ROOT / "configs" / "calib" / "wuji_hand2.yaml"
+_DEFAULT_CONFIG = _PACKAGE_ROOT / "configs" / "wuji_hand2.yaml"
 _DEFAULT_O6_CALIB = _PACKAGE_ROOT / "configs" / "users" / "pico.yaml"
 _LINKER_LAYOUTS = ("o6", "l6", "o7")
-
-
-@dataclass
-class WujiCurlGains:
-    """Hand 2 curl knobs (OpenXR features → 20-DOF lerp + URDF pinch)."""
-
-    calib_path: Path | None = None
-    output_alpha: float = 0.85
-    pinch_target_link: str = "pip"
-    pinch_axis: int = 0
-    opposition_index: int = 0
-    hold_abd: bool = True
-    dip_mode: str = "couple"
-    dip_couple_ratio: float = 0.65
-    urdf_path: str | None = None
 
 
 @dataclass
@@ -117,47 +91,9 @@ class O6CurlGains:
 
 @dataclass
 class WujiBackendConfig:
-    """Official wuji-retargeting YAML paths + optional optical overlay."""
+    """Wuji Hand 2 via ``wuji_sdk.RetargetSession`` (builtin IK)."""
 
-    root: Path | None
-    official_yaml: dict[str, str]
-    profile: str  # optical | glove
-    overlay: dict[str, Any]
-    qpos_index: tuple[int, ...] | None
-    qpos_remap: str  # name | off
     cfg_path: Path
-
-    def yaml_for(self, side: str) -> Path:
-        spec = self.official_yaml.get(side)
-        if not spec:
-            raise FileNotFoundError(f"wuji.official_yaml.{side} is not set")
-        wuji_root = find_wuji_retargeting_root(self.root)
-        path = _resolve_official_yaml(
-            spec, cfg_path=self.cfg_path, wuji_root=wuji_root
-        )
-        if not path.is_file():
-            raise FileNotFoundError(
-                f"wuji official yaml for {side} not found: {path}\n"
-                "Install the official repo: ./init.sh install-wuji-retargeting"
-            )
-        return path
-
-    def retarget_overlay(self) -> dict[str, Any]:
-        out: dict[str, Any] = {}
-        if self.profile == "optical":
-            out.update(OPTICAL_RETARGET_OVERLAY)
-        out.update(self.overlay)
-        return out
-
-    def qpos_permutation(self, dof: int) -> np.ndarray | None:
-        if not self.qpos_index:
-            return None
-        perm = np.asarray(self.qpos_index, dtype=np.int64)
-        if perm.shape != (dof,):
-            raise ValueError(
-                f"wuji.qpos_index must have length {dof}, got {perm.shape}"
-            )
-        return perm
 
 
 @dataclass
@@ -184,12 +120,11 @@ class HandRuntimeConfig:
     path: Path
     xhand1: HandConfig | None
     wuji: WujiBackendConfig | None
-    wuji_curl: WujiCurlGains | None
     o6_curl: O6CurlGains | None = None
     motion: MotionSafetyGains | None = None
     command: CommandSafetyConfig | None = None
 
-    wuji_type: str = "curl"  # curl | official
+    wuji_type: str = "official"
     linker_type: str = "curl"  # curl | nest | veccurl | mp_curl
 
     @property
@@ -197,7 +132,7 @@ class HandRuntimeConfig:
         if self.backend == "xhand1" and self.xhand1 is not None:
             return self.xhand1.retargeting_type
         if self.backend == "wuji":
-            return self.wuji_type
+            return "official"
         if self.backend in ("o6", "l6", "o7"):
             return self.linker_type or "curl"
         return self.backend
@@ -253,58 +188,6 @@ def resolve_config_path(path: str | Path | None = None) -> Path:
     if _DEFAULT_CONFIG.is_file():
         return _DEFAULT_CONFIG.resolve()
     raise FileNotFoundError(f"hand config not found: {_DEFAULT_CONFIG}")
-
-
-def _installed_wuji_roots() -> list[Path]:
-    """Checkout roots of installed wuji-retargeting. Does not import pinocchio."""
-    roots: list[Path] = []
-    try:
-        from importlib.metadata import distribution
-
-        dist = distribution("wuji-retargeting")
-        loc = Path(str(dist.locate_file(""))).resolve()
-        roots.append(loc)
-        if dist.files:
-            for file in dist.files:
-                s = str(file).replace("\\", "/")
-                if s.endswith("wuji_retargeting/__init__.py"):
-                    roots.append(Path(dist.locate_file(file)).resolve().parent.parent)
-                    break
-    except Exception:
-        pass
-    return roots
-
-
-def find_wuji_retargeting_root(explicit: str | Path | None = None) -> Path | None:
-    """Locate the official wuji-retargeting checkout (needs example/config + URDF)."""
-    candidates: list[Path] = []
-    if explicit:
-        candidates.append(Path(explicit).expanduser())
-    import os
-
-    env = os.environ.get("WUJI_RETARGETING_ROOT")
-    if env:
-        candidates.append(Path(env).expanduser())
-    # Preferred: under xr_hand_retarget/; legacy: repo-root third_party/.
-    candidates.append(_PACKAGE_ROOT / "third_party" / "wuji-retargeting")
-    candidates.append(_REPO_ROOT / "third_party" / "wuji-retargeting")
-    candidates.extend(_installed_wuji_roots())
-    seen: set[Path] = set()
-    for cand in candidates:
-        try:
-            resolved = cand.resolve()
-        except OSError:
-            continue
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        if (resolved / "example" / "config").is_dir():
-            return resolved
-        if (resolved / "wuji_retargeting").is_dir() and (
-            resolved / "example" / "config"
-        ).is_dir():
-            return resolved
-    return None
 
 
 def _normalize_backend(raw: str) -> str:
@@ -384,35 +267,9 @@ def detect_backend(raw: dict[str, Any]) -> str:
     )
 
 
-def _resolve_official_yaml(
-    spec: str | Path,
-    *,
-    cfg_path: Path,
-    wuji_root: Path | None,
-) -> Path:
-    p = Path(spec)
-    if p.is_absolute() and p.is_file():
-        return p
-    search: list[Path] = [
-        cfg_path.parent / p,
-        _PACKAGE_ROOT / "configs" / p,
-        _PACKAGE_ROOT / p,
-        _PACKAGE_ROOT / "configs" / "official" / p.name,
-    ]
-    if wuji_root is not None:
-        search.append(wuji_root / p)
-        search.append(wuji_root / "example" / "config" / p.name)
-    for cand in search:
-        if cand.is_file():
-            return cand.resolve()
-    if wuji_root is not None:
-        return (wuji_root / p)
-    return p
-
-
 def _resolve_curl_calib(raw_path: str | None, cfg_path: Path) -> Path | None:
     if not raw_path:
-        return _DEFAULT_CURL_CALIB if _DEFAULT_CURL_CALIB.is_file() else None
+        return None
     p = Path(raw_path)
     candidates = [
         p,
@@ -744,93 +601,8 @@ def _parse_o6_curl(
     )
 
 
-def _parse_wuji_curl(retargeting: dict[str, Any], cfg_path: Path) -> WujiCurlGains:
-    raw = retargeting.get("curl") or retargeting.get("curl_calib") or {}
-    calib_raw = raw.get("calib") or raw.get("calib_path")
-    return WujiCurlGains(
-        calib_path=_resolve_curl_calib(
-            None if calib_raw is None else str(calib_raw), cfg_path
-        ),
-        output_alpha=float(raw.get("output_alpha", 0.85)),
-        pinch_target_link=str(raw.get("pinch_target_link") or raw.get("pinch_target") or "pip"),
-        pinch_axis=int(raw.get("pinch_axis", 0)),
-        opposition_index=int(raw.get("opposition_index", 0)),
-        hold_abd=bool(raw.get("hold_abd", True)),
-        dip_mode=str(raw.get("dip_mode") or "couple").lower(),
-        dip_couple_ratio=float(raw.get("dip_couple_ratio", 0.65)),
-        urdf_path=raw.get("urdf_path"),
-    )
-
-
-def _parse_wuji(
-    raw: dict[str, Any],
-    cfg_path: Path,
-    *,
-    user: str | Path | None = None,
-) -> WujiBackendConfig:
-    block = raw.get("wuji") or {}
-    wuji_root = find_wuji_retargeting_root(block.get("root"))
-    official = block.get("official_yaml") or {}
-    if not official:
-        raise ValueError("wuji.official_yaml.{left,right} is required")
-    specs: dict[str, str] = {}
-    for side in ("left", "right"):
-        spec = official.get(side)
-        if spec is None:
-            continue
-        specs[side] = str(spec)
-    profile = str(block.get("profile") or "as_is").lower()
-    aliases = {"yaml": "as_is", "official": "as_is", "none": "as_is"}
-    profile = aliases.get(profile, profile)
-    if profile not in ("optical", "glove", "as_is"):
-        raise ValueError(
-            f"wuji.profile must be as_is|optical|glove, got {profile!r}"
-        )
-    qidx = block.get("qpos_index")
-    qpos_index = None if qidx is None else tuple(int(x) for x in qidx)
-    remap = str(block.get("qpos_remap") or "name").lower()
-    if remap in ("auto", "idx_q", "true", "1"):
-        remap = "name"
-    if remap in ("identity", "none", "false", "0"):
-        remap = "off"
-    if remap not in ("name", "off"):
-        raise ValueError(f"wuji.qpos_remap must be name|off, got {remap!r}")
-
-    # T_robot (hands/wuji.yaml) → inline overlay → T_person segment_scaling
-    overlay: dict[str, Any] = {}
-    robot_spec = block.get("robot") or block.get("workspace")
-    if robot_spec:
-        robot_path = _resolve_packaged_yaml(str(robot_spec), cfg_path)
-        robot_raw = _load_yaml_mapping(robot_path)
-        retarget = robot_raw.get("retarget") or robot_raw.get("overlay") or {}
-        if isinstance(retarget, dict):
-            overlay = _deep_merge(overlay, retarget)
-    overlay = _deep_merge(overlay, dict(block.get("overlay") or {}))
-
-    user_spec = None if user in (None, "") else str(user)
-    if not user_spec:
-        user_spec = block.get("user")
-    if user_spec:
-        from xr_hand_retarget.person import load_person_calib, merge_segment_scaling
-
-        person = load_person_calib(_resolve_user_calib(str(user_spec), cfg_path))
-        if person.segment_scaling:
-            overlay["segment_scaling"] = merge_segment_scaling(
-                overlay.get("segment_scaling")
-                if isinstance(overlay.get("segment_scaling"), dict)
-                else None,
-                person.segment_scaling,
-            )
-
-    return WujiBackendConfig(
-        root=wuji_root,
-        official_yaml=specs,
-        profile=profile,
-        overlay=overlay,
-        qpos_index=qpos_index,
-        qpos_remap=remap,
-        cfg_path=cfg_path.resolve(),
-    )
+def _parse_wuji(cfg_path: Path) -> WujiBackendConfig:
+    return WujiBackendConfig(cfg_path=cfg_path.resolve())
 
 
 def load_runtime_config(
@@ -859,9 +631,8 @@ def load_runtime_config(
 
     xhand1: HandConfig | None = None
     wuji: WujiBackendConfig | None = None
-    wuji_curl: WujiCurlGains | None = None
     o6_curl: O6CurlGains | None = None
-    wuji_type = "curl"
+    wuji_type = "official"
     linker_type = "curl"
     if backend == "xhand1":
         inner = raw.get("xhand1", {}).get("config") if isinstance(raw.get("xhand1"), dict) else None
@@ -937,15 +708,9 @@ def load_runtime_config(
             else:
                 linker_type = "curl"
         else:
-            rtype = str(ret.get("type") or "curl").lower()
-            wuji_type = (
-                "official"
-                if rtype in ("official", "wuji", "analytical", "optimizer")
-                else "curl"
-            )
-            wuji_curl = _parse_wuji_curl(ret, cfg_path)
-            if raw.get("wuji") or wuji_type == "official":
-                wuji = _parse_wuji(raw, cfg_path, user=user)
+            # Wuji production path is RetargetSession only.
+            wuji_type = "official"
+            wuji = _parse_wuji(cfg_path)
 
     clamp_urdf = bool(safety.get("clamp_urdf", True))
     max_joint_vel_rad_s = float(safety.get("max_joint_vel_rad_s", 0.0))
@@ -978,7 +743,6 @@ def load_runtime_config(
         path=cfg_path.resolve(),
         xhand1=xhand1,
         wuji=wuji,
-        wuji_curl=wuji_curl,
         o6_curl=o6_curl,
         motion=motion,
         command=command,

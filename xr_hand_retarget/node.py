@@ -239,12 +239,10 @@ def main(argv=None):
         )
 
     if cfg.backend == "wuji":
-        rtype_guess = (retargeting_type or cfg.retargeting_type or "curl").lower()
-        if rtype_guess not in ("curl", "curl_calib", "calib"):
-            from xr_hand_retarget.backends.wuji import preflight_wuji
+        from xr_hand_retarget.backends.wuji import preflight_wuji
 
-            for side in sides:
-                preflight_wuji(cfg, side)
+        for side in sides:
+            preflight_wuji(cfg, side)
 
     print("init xrobotoolkit_sdk...", flush=True)
     xrt.init()

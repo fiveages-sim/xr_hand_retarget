@@ -5,15 +5,11 @@
 ## 1. 安装
 
 ```bash
-./init.sh install
-# Wuji official 另需（clone + editable 进当前 backend 环境）：
-./init.sh install-wuji-retargeting
-# 自检（须与 run.sh 同一环境）：
-python -c 'import wuji_retargeting; print(wuji_retargeting.__file__)'
+./init.sh install   # 含 wuji-sdk（RetargetSession）
 cp configs/local.yaml.example configs/local.yaml
 ```
 
-Wuji 安装细节 / `pin` 镜像 / ABI → [../algorithms/OFFICIAL.md](../algorithms/OFFICIAL.md)。
+Wuji 细节见 [../algorithms/OFFICIAL.md](../algorithms/OFFICIAL.md)。
 
 ## 2. 用户层参数（`configs/local.yaml`）
 
