@@ -1,0 +1,16 @@
+# Build / env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+*.egg
+
+# On-demand official Wuji solver (./init.sh install-wuji-retargeting)
+third_party/
+
+# Local debug / overlays
+debug/
+configs/tests/
+*.pem
