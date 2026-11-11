@@ -1,6 +1,5 @@
 # Wuji Hand 2 — index (layer 2).
-# T_robot: hands/wuji.yaml | curl calib: calib/wuji_hand2.yaml (user-kind)
-# Official yaml: configs/official/*
+# Solver: wuji_sdk.RetargetSession (builtin Hand2 IK; dep of xr_hand_retarget)
 #
 # FA_HAND=wuji ./run.sh vr-xrt wrist
 # or: python -m xr_hand_retarget --config xr_hand_retarget/configs/wuji_hand2.yaml --side right
@@ -10,6 +9,7 @@ backend: wuji
 hand:
   id: wuji_hand2
   dof: 20
+  # Firmware finger-major order (thumb..pinky × 4); matches RetargetSession.step output.
   joint_names:
     - thumb_cmc_flex
     - thumb_cmc_abd
@@ -33,19 +33,7 @@ hand:
     - pinky_dip
 
 retargeting:
-  # Fixed: official (teleop_ws WujiHand2SdkRetarget peer). curl retired.
   type: official
-
-wuji:
-  robot: hands/wuji.yaml          # T_robot overlay (segment_scaling, weights, …)
-  # user: users/<id>.yaml         # optional T_person (person.segment_scaling)
-  official_yaml:
-    left: official/adaptive_analytical_wuji_hand_2_left.yaml
-    right: official/adaptive_analytical_wuji_hand_2_right.yaml
-  profile: as_is
-  qpos_remap: name
-  # Inline overlay still merged last (compat). Prefer hands/wuji.yaml for new knobs.
-  overlay: {}
 
 ros:
   controller: hand_joint_controller
@@ -66,10 +54,8 @@ safety:
     enabled: true
     publish_command: true
     allowed_fsm_states: [3, 4]
-    max_velocity: 1.5          # teleop_ws wuji_hand2 default
+    max_velocity: 1.5
     filter_cutoff_hz: 8.0
     command_epsilon: 0.001
     target_timeout: 0.25
     require_resync: true
-
-# publish.rate_hz retired (async uses local teleop.publish_hz / FA_HAND_PUBLISH_HZ).

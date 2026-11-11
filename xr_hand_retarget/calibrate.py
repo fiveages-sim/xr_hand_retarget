@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from xr_hand_retarget.config import find_wuji_retargeting_root, load_runtime_config
+from xr_hand_retarget.config import load_runtime_config
 from xr_hand_retarget.landmarks import openxr26_to_mediapipe21, pose_is_zero
 
 
@@ -37,7 +37,7 @@ def _parse_args(argv=None):
     p.add_argument(
         "--dump-pkl",
         default=None,
-        help="Wuji: write official-style {left,right}_fingers pkl for tuning_tool / calibrate_offset --play",
+        help="Wuji: write MediaPipe-21 pkl dump ({t, left_fingers, right_fingers})",
     )
     p.add_argument(
         "--preview-only",
@@ -88,58 +88,22 @@ def _parse_args(argv=None):
 
 
 def _wuji_help(cfg) -> int:
-    root = find_wuji_retargeting_root(None if cfg.wuji is None else cfg.wuji.root)
-    print("Wuji Hand 2 uses the official wuji-retargeting calibration, not XHand1 curl.")
+    del cfg  # runtime config reserved for future SDK-user wiring
+    print("Wuji Hand 2 retarget uses wuji_sdk.RetargetSession (builtin IK).")
     print()
-    print("1) Install official source + models:")
-    print("     ./init.sh install-wuji-retargeting")
-    print("2) Official parameter order (docs.wuji.tech → Parameter Tuning):")
-    print("     segment_scaling → w_pos/w_dir/w_full_hand → pinch_thresholds → lp_alpha")
-    if root is None:
-        print()
-        print("Official checkout not found. After install, re-run this command.")
-        print("  ./init.sh install-wuji-retargeting")
-        print()
-        print("Optical capture (after SDK is up, stop vr-xrt):")
-        print(
-            "  python -m xr_hand_retarget.calibrate --config <this yaml> "
-            "--side full --dump-pkl /tmp/xrt_mp21.pkl"
-        )
-        return 1
-    example = root / "example"
+    print("1) Install (wuji-sdk comes with xr_hand_retarget):")
+    print("     ./init.sh install")
+    print("2) Smoke (no hardware):")
+    print("     python -c \"from wuji_sdk import HandModel, Handedness, RetargetSession;\"\\")
+    print("               \" RetargetSession.for_hand(HandModel.WujiHand2, side=Handedness.Right)\"")
+    print("3) Glove teleop / SDK user calibration:")
+    print("     https://docs.wuji.tech/docs/en/wuji-sdk/latest/retargeting")
+    print("     https://docs.wuji.tech/docs/en/wuji-sdk/latest/sdk-practice/retarget-session")
+    print("     examples: wuji-sdk repo → examples/python/retargeting/")
     print()
-    print("Official tools (from the cloned repo):")
-    print(f"  cd {example}")
-    for side in ("left", "right"):
-        try:
-            yml = cfg.wuji.yaml_for(side) if cfg.wuji is not None else None
-        except FileNotFoundError:
-            yml = None
-        rel = yml if yml is not None else f"<official yaml for {side}>"
-        print(f"  python tuning_tool.py --hand {side} --config {rel}")
-        print(
-            f"  python calibrate_offset.py --hand {side} --config {rel}   # glove live"
-        )
-    print()
-    print("Optical Pico (no glove):")
-    print("  - Stop ./run.sh vr-xrt (PC Service allows one SDK client).")
-    print("  - Capture MediaPipe-21 pkl:")
-    print(
-        "      python -m xr_hand_retarget.calibrate --config <this yaml> "
-        "--side full --dump-pkl /tmp/xrt_mp21.pkl"
-    )
-    print("  - Replay in official tools:")
-    print("      python tuning_tool.py --play /tmp/xrt_mp21.pkl --hand right --config <official yaml>")
-    print(
-        "      python calibrate_offset.py --play /tmp/xrt_mp21.pkl --trust-pkl "
-        "--hand right --config <official yaml>"
-    )
-    print()
-    print("  calibrate_offset.py link names are gen-1 (finger*_link1). If Hand 2")
-    print("  FK fails, use tuning_tool.py and write wrist_offset_cm / thumb_offset_cm")
-    print("  into wuji.overlay in this YAML (or edit the official yaml).")
-    print()
-    print("Docs: https://docs.wuji.tech/docs/en/wuji-retargeting/latest/tuning/")
+    print("Optical Pico: feed MediaPipe-21 keypoints into RetargetSession;")
+    print("  tuning knobs (segment_scaling / mediapipe_rotation) are not exposed.")
+    print("  Preview keypoints: python -m xr_hand_retarget.preview --side right")
     return 0
 
 
@@ -202,15 +166,9 @@ def _capture_pkl(cfg, *, sides: tuple[str, ...], seconds: float, rate: float, ou
     with out.open("wb") as f:
         pickle.dump(frames, f)
     print(f"Wrote {len(frames)} frames → {out}")
-    print("Replay with official example/tuning_tool.py --play …")
     return 0
 
 
-_CORE = (
-    ("open", "手掌伸直：五指自然张开、不要刻意外展，拇指伸直并与手掌垂直"),
-    ("fist", "握拳：四指握紧；拇指随意（本姿态不测拇指）"),
-    ("thumb_to_pinky", "对掌：其余指伸直，拇指收到掌面最靠小指一侧"),
-)
 _O6_CORE = (
     ("open", "手掌伸直：五指自然张开、不要刻意外展，拇指伸直并与手掌垂直"),
     ("fist", "握拳：四指握紧；拇指保持放松（本姿态不测拇指）"),
@@ -552,23 +510,6 @@ def _run_curl_capture(
             xrt.close()
         except Exception:
             pass
-
-
-def _run_hand2_curl_capture(cfg, args) -> int:
-    from xr_hand_retarget.algorithms.curl_hand2 import dump_calib_file
-
-    return _run_curl_capture(
-        cfg,
-        args,
-        dump_calib_file=dump_calib_file,
-        default_out=Path("configs/calib/wuji_hand2.yaml"),
-        calib_path=cfg.wuji_curl.calib_path if cfg.wuji_curl else None,
-        core_poses=_CORE,
-        run_hint=(
-            "FA_HAND_CONFIG=xr_hand_retarget/configs/wuji_hand2.yaml "
-            "./run.sh vr-xrt wrist"
-        ),
-    )
 
 
 def _export_linker_session(args) -> int:

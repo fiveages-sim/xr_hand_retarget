@@ -8,7 +8,6 @@ schema: fa_person.v1
 
 person:
   bone_scale: 1.0
-  # Optional: overrides hands/wuji.yaml segment_scaling for this operator.
   # segment_scaling:
   #   thumb:  [1.0, 1.0, 1.0]
   #   index:  [1.0, 1.0, 1.0]

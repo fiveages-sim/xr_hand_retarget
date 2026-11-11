@@ -29,4 +29,4 @@ cp configs/local.yaml.example configs/local.yaml   # 改 hands.type
 | `o6` / `l6` / `o7` | `curl` | [user/LINKER_CALIB](docs/user/LINKER_CALIB.md) |
 
 CLI：`xr-hand-retarget` / `xr-hand-calibrate`（旧名 `xr-xhand1-*` 仍指向本包）。  
-Wuji 官方包：`./init.sh install-wuji-retargeting`；NumPy 2.x 钉回见 [docs/algorithms/OFFICIAL.md](docs/algorithms/OFFICIAL.md)。
+Wuji：`wuji-sdk` 已是本包依赖（`./init.sh install` 即装），见 [docs/algorithms/OFFICIAL.md](docs/algorithms/OFFICIAL.md)。

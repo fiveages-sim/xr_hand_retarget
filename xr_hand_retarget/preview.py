@@ -1,14 +1,12 @@
 """Live OpenXR → MediaPipe-21 skeleton preview (no IK, no ROS).
 
 Use this to see whether Pico tracking / 26→21 mapping looks like a hand
-before blaming the official Retargeter.
+before blaming ``wuji_sdk.RetargetSession``.
 
     python -m xr_hand_retarget.preview --side right
     python -m xr_hand_retarget.preview --side right --dump /tmp/xrt_mp21.pkl
 
-Dump format matches official wuji-retargeting ``example/input_devices/mediapipe_replay.py``
-(list of ``{t, left_fingers, right_fingers}``, each (21, 3) meters, raw MP21).
-Replay with official ``example/tuning_tool.py --play``.
+Dump is a list of ``{t, left_fingers, right_fingers}``, each (21, 3) meters, raw MP21.
 """
 
 from __future__ import annotations
@@ -123,31 +121,6 @@ def _draw_panel(mp21: np.ndarray, title: str, size: int = 420) -> "np.ndarray":
     return img
 
 
-def _apply_mano(mp21: np.ndarray, side: str, rotation_xyz: dict) -> np.ndarray:
-    from wuji_retargeting.mediapipe import apply_mediapipe_transformations
-
-    kp = apply_mediapipe_transformations(mp21, side)
-    x_deg = float(rotation_xyz.get("x", 0.0) or 0.0)
-    y_deg = float(rotation_xyz.get("y", 0.0) or 0.0)
-    z_deg = float(rotation_xyz.get("z", 0.0) or 0.0)
-    if x_deg == 0.0 and y_deg == 0.0 and z_deg == 0.0:
-        return kp
-    from scipy.spatial.transform import Rotation
-
-    rot = Rotation.from_euler("xyz", [x_deg, y_deg, z_deg], degrees=True)
-    return kp @ rot.as_matrix().T
-
-
-def _rotation_from_cfg(cfg, side: str) -> dict:
-    if cfg.wuji is None:
-        return {}
-    from xr_hand_retarget.backends.wuji import load_official_config
-
-    yaml_path = cfg.wuji.yaml_for(side)
-    official = load_official_config(yaml_path, cfg.wuji.retarget_overlay())
-    return dict((official.get("retarget") or {}).get("mediapipe_rotation") or {})
-
-
 def _empty21() -> np.ndarray:
     return np.zeros((21, 3), dtype=np.float32)
 
@@ -234,20 +207,15 @@ def run_preview(cfg, *, side: str, rate: float, dump: str | None = None) -> int:
     else:
         get_active, get_hand = xrt.get_right_hand_is_active, xrt.get_right_hand_tracking_state
 
-    rot = {}
-    try:
-        rot = _rotation_from_cfg(cfg, side)
-    except Exception as exc:
-        print(f"official yaml rotation skipped: {exc}", flush=True)
-
+    del cfg  # config reserved if preview gains SDK-side overlays later
     print("init xrobotoolkit_sdk (stop ./run.sh vr-xrt first)...", flush=True)
     xrt.init()
     time.sleep(0.8)
     print(
-        f"preview {side}  rotation={rot or '0,0,0'}\n"
-        "  LEFT  = OpenXR 26→21 in palm plane  (Pico tracking)\n"
-        "  RIGHT = official MANO + mediapipe_rotation  (what IK sees)\n"
-        "  q quit.  A good Pico hand looks like a 5-finger stick figure on BOTH panels.",
+        f"preview {side}\n"
+        "  LEFT  = OpenXR 26→21 (Pico tracking, palm plane)\n"
+        "  RIGHT = same keypoints (RetargetSession applies builtin transforms)\n"
+        "  q quit.  A good Pico hand looks like a 5-finger stick figure.",
         flush=True,
     )
     period = 1.0 / max(rate, 1.0)
@@ -264,21 +232,16 @@ def run_preview(cfg, *, side: str, rate: float, dump: str | None = None) -> int:
             xyz = float(np.abs(raw[:, :3]).max()) if raw.size else 0.0
             if pose_is_zero(raw) or active == 0:
                 mp21 = np.zeros((21, 3), dtype=np.float64)
-                mano = mp21
                 area = 0.0
                 span = 0.0
             else:
                 mp21 = openxr26_to_mediapipe21(raw)
                 area = palm_triangle_area_m2(mp21)
                 span = float(np.linalg.norm(mp21 - mp21[0:1], axis=1).max())
-                try:
-                    mano = _apply_mano(mp21, side, rot)
-                except Exception:
-                    mano = mp21
             if dump:
                 frames.append(_dump_frame(time.time() - t0_rec, side, mp21))
             left = _draw_panel(mp21, f"raw MP21  active={active}")
-            right = _draw_panel(mano, f"MANO+rot {rot or '{}'}")
+            right = _draw_panel(mp21, "MP21 → RetargetSession")
             canvas = np.hstack([left, right])
             hud = (
                 f"{side} xyz={xyz:.3f}m  palm={area:.2e}m2  span={span:.3f}m  "
@@ -330,7 +293,7 @@ def main(argv=None) -> int:
         "--dump",
         default=None,
         metavar="PKL",
-        help="Write official MediaPipe-replay pkl for wuji-retargeting tuning_tool.py --play",
+        help="Write MediaPipe-21 pkl dump ({t, left_fingers, right_fingers})",
     )
     args = p.parse_args(argv)
     from xr_hand_retarget.config import load_runtime_config

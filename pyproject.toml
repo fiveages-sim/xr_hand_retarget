@@ -11,12 +11,10 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy<2.0.0",
     "pyyaml",
+    "wuji-sdk>=2026.7.21",
 ]
 
 [project.optional-dependencies]
-# Official Wuji solver (pin + nlopt). Install the cloned repo instead:
-#   ./init.sh install-wuji-retargeting
-wuji = []
 vector = ["scipy>=1.10"]
 
 [project.scripts]

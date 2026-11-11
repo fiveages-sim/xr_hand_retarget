@@ -57,7 +57,7 @@
 
 ## 4. 标准手 = Wuji 21（不是 20-DOF）
 
-标准手是 **21 点笛卡尔**（与官方 wuji-retargeting / 光学手套同一套），不是 Hand 2 的 20 个主动关节。
+标准手是 **21 点笛卡尔**（与 wuji-sdk / 光学手套同一套），不是 Hand 2 的 20 个主动关节。
 
 ```
 VR 26 / 手套 / DexCap  →  T_person（users/*.yaml）

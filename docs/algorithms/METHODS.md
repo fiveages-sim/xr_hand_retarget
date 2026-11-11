@@ -6,7 +6,7 @@
 |------|--------|------|----------------|
 | **xhand1** | `vector` | `algorithms/vector_retarget.py`（somehand / 键向量） | DexCap → AnyDex `KeyVectorOptimizer` |
 | **o6 / l6 / o7** | `curl` | `algorithms/palm_tip.py`（PalmTip 标定插值） | 手套 → `GloveYamlRemapRetarget` |
-| **wuji** | `official` | `backends/wuji.py` + wuji-retargeting | `WujiHand2SdkRetarget` |
+| **wuji** | `official` | `backends/wuji.py` + `wuji_sdk.RetargetSession` | `WujiHand2SdkRetarget` |
 
 运行时目录：`xr_hand_retarget.algorithms.HAND_METHOD` / `method_for_backend()`。
 

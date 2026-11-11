@@ -1,7 +1,7 @@
 """OpenXR 26 → MediaPipe 21 (xyz only). No palm-frame preprocess.
 
-Official wuji-retargeting applies its own wrist-frame transform. Do not run
-SomeHand ``preprocess_landmarks`` before ``Retargeter.retarget``.
+``wuji_sdk.RetargetSession`` applies its own wrist-frame transform. Do not run
+SomeHand ``preprocess_landmarks`` before ``session.step``.
 """
 
 from __future__ import annotations
