@@ -96,14 +96,9 @@ def _wuji_help(cfg) -> int:
     print("2) Smoke (no hardware):")
     print("     python -c \"from wuji_sdk import HandModel, Handedness, RetargetSession;\"\\")
     print("               \" RetargetSession.for_hand(HandModel.WujiHand2, side=Handedness.Right)\"")
-    print("3) Glove teleop / SDK user calibration:")
-    print("     https://docs.wuji.tech/docs/en/wuji-sdk/latest/retargeting")
-    print("     https://docs.wuji.tech/docs/en/wuji-sdk/latest/sdk-practice/retarget-session")
-    print("     examples: wuji-sdk repo → examples/python/retargeting/")
-    print()
-    print("Optical Pico: feed MediaPipe-21 keypoints into RetargetSession;")
-    print("  tuning knobs (segment_scaling / mediapipe_rotation) are not exposed.")
-    print("  Preview keypoints: python -m xr_hand_retarget.preview --side right")
+    print("3) Optical Pico: MediaPipe-21 → RetargetSession (builtin tuning).")
+    print("     Docs: https://docs.wuji.tech/docs/en/wuji-sdk/latest/retargeting")
+    print("     Preview: python -m xr_hand_retarget.preview --side right")
     return 0
 
 

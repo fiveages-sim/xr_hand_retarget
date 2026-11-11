@@ -11,6 +11,4 @@
 - [Hand Retargeting](https://docs.wuji.tech/docs/en/wuji-sdk/latest/retargeting)
 - [Retarget Session](https://docs.wuji.tech/docs/en/wuji-sdk/latest/sdk-practice/retarget-session)
 
-离线人–物数据集（非实时遥操）见 [TopoRetarget](https://github.com/wuji-technology/toporetarget)，与本仓生产路径无关。
-
-现场光学调试见 [../user/WUJI_CALIB.md](../user/WUJI_CALIB.md)。
+本仓只接光学 MediaPipe-21 → 关节；现场调试见 [../user/WUJI_CALIB.md](../user/WUJI_CALIB.md)。

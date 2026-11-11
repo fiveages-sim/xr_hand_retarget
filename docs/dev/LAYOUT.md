@@ -5,9 +5,11 @@
 ```
 fa-py-libraries/
   xr_hand_retarget/          # 子模块
+    README.md / README_CN.md # 与 vr_pose_publisher 同风格的双语入口
     xr_hand_retarget/        # importable：algorithms / backends / control / sources / …
     configs/                 # 手型索引 + hands/ users/ calib/
     assets/                  # URDF + cspace
+    docs/{user,dev,algorithms}/
     # wuji-sdk：本包主依赖（RetargetSession）
   vr_pose_publisher/         # XRT 路径 import xr_hand_retarget.dual_node
   configs/local.yaml         # 本机白名单

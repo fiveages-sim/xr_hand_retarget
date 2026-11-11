@@ -1,6 +1,6 @@
 # 算法与开源 / 官方源
 
-按手型各一条 method，见 [METHODS.md](METHODS.md)。
+按手型各一条 method，见 [METHODS.md](METHODS.md)。总览入口：[../../README.md](../../README.md) / [../../README_CN.md](../../README_CN.md)。
 
 | 文档 | 内容 |
 |------|------|
